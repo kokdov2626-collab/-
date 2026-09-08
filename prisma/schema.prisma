@@ -1,0 +1,165 @@
+// "סל חכם" — Prisma schema
+// מסד PostgreSQL (מיועד ל-Neon)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Supermarket {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  logo      String?
+  website   String?
+  active    Boolean  @default(true)
+  isDemo    Boolean  @default(true) // מסמן נתוני הדגמה עד לחיבור מקור אמיתי
+  createdAt DateTime @default(now())
+
+  stores          Store[]
+  prices          Price[]
+  promotions      Promotion[]
+  deliveryOptions DeliveryOption[]
+  providerLogs    ProviderLog[]
+}
+
+model Store {
+  id                String   @id @default(cuid())
+  supermarketId     String
+  supermarket       Supermarket @relation(fields: [supermarketId], references: [id])
+  name              String
+  city              String
+  address           String?
+  deliveryAvailable Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  @@index([supermarketId, city])
+}
+
+model Product {
+  id        String   @id @default(cuid())
+  name      String
+  category  String?
+  createdAt DateTime @default(now())
+
+  variants ProductVariant[]
+
+  @@index([name])
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  brand     String?
+  size      Float?
+  unit      String?  // גרם / מ"ל / יחידה וכו'
+  barcode   String?  @unique
+
+  prices     Price[]
+  promotions Promotion[]
+
+  @@index([productId])
+  @@index([barcode])
+}
+
+model Price {
+  id               String   @id @default(cuid())
+  productVariantId String
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id])
+  supermarketId    String
+  supermarket      Supermarket @relation(fields: [supermarketId], references: [id])
+  storeId          String?
+  price            Float
+  regularPrice     Float?
+  salePrice        Float?
+  memberPrice      Float?
+  isOnSale         Boolean  @default(false)
+  source           String   // שם ה-Provider שסיפק את הנתון (DEMO_* עד לחיבור אמיתי)
+  updatedAt        DateTime @default(now())
+
+  @@index([productVariantId, supermarketId])
+  @@index([updatedAt])
+}
+
+model PriceHistory {
+  id               String   @id @default(cuid())
+  productVariantId String
+  supermarketId    String
+  price            Float
+  recordedAt       DateTime @default(now())
+
+  @@index([productVariantId, supermarketId, recordedAt])
+}
+
+model Promotion {
+  id               String   @id @default(cuid())
+  productVariantId String
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id])
+  supermarketId    String
+  supermarket      Supermarket @relation(fields: [supermarketId], references: [id])
+  type             String
+  description      String?
+  startDate        DateTime?
+  endDate          DateTime?
+  conditions       String?
+
+  @@index([productVariantId, supermarketId])
+}
+
+model DeliveryOption {
+  id               String   @id @default(cuid())
+  supermarketId    String
+  supermarket      Supermarket @relation(fields: [supermarketId], references: [id])
+  city             String
+  minimumOrder     Float    @default(0)
+  deliveryPrice    Float    @default(0)
+  freeDeliveryFrom Float?
+  serviceFee       Float    @default(0)
+  updatedAt        DateTime @default(now())
+
+  @@unique([supermarketId, city])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  shoppingLists ShoppingList[]
+}
+
+model ShoppingList {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  createdAt DateTime @default(now())
+
+  items ShoppingListItem[]
+}
+
+model ShoppingListItem {
+  id               String   @id @default(cuid())
+  shoppingListId   String
+  shoppingList     ShoppingList @relation(fields: [shoppingListId], references: [id])
+  productName      String
+  quantity         Int      @default(1)
+  unit             String?
+  preferredBrand   String?
+  allowAlternative Boolean  @default(true)
+}
+
+// לוג ניטור Providers (סעיף 27)
+model ProviderLog {
+  id            String   @id @default(cuid())
+  supermarketId String
+  supermarket   Supermarket @relation(fields: [supermarketId], references: [id])
+  status        String   // OK / ERROR
+  message       String?
+  runAt         DateTime @default(now())
+}
